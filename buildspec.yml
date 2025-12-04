@@ -1,0 +1,40 @@
+version: 0.2
+
+env:
+  variables:
+    IMAGE_TAG: latest
+
+phases:
+  install:
+    commands:
+      - echo "Installing pack CLI..."
+      - curl -sSL "https://github.com/buildpacks/pack/releases/download/v0.39.0/pack-v0.39.0-linux.tgz" | tar -C /usr/local/bin/ --no-same-owner -xzv pack
+      - pack version
+      - python3 --version
+
+  pre_build:
+    commands:
+      - echo "Syncing user function code from S3..."
+      - mkdir -p app
+      - aws s3 sync "s3://${USER_CODE_BUCKET}/${FUNCTION_S3_PREFIX}" ./app
+      - echo "Patching package.json..."
+      - cd app && python3 ../scripts/patch_package_json.py && cd ..
+      - echo "Authenticating to Amazon ECR..."
+      - aws ecr get-login-password --region "${AWS_DEFAULT_REGION}" | docker login --username AWS --password-stdin "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com"
+      - export IMAGE="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/codebuild-test-repo:${FUNCTION_ID}-${IMAGE_TAG}"
+      - echo "Target image:${FUNCTION_ID}-${IMAGE_TAG}"
+
+  build:
+    commands:
+      - echo "Building Docker image with Cloud Native Buildpacks..."
+      - pack build "${IMAGE}" --builder gcr.io/buildpacks/builder:latest --path ./app --pull-policy if-not-present
+
+  post_build:
+    commands:
+      - echo "Pushing image to ECR..."
+      - docker push "${IMAGE}"
+      - echo "Build complete. Image:${FUNCTION_ID}-${IMAGE_TAG}"
+
+artifacts:
+  files:
+    - "**/*"
