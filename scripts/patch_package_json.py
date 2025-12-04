@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 import json
-import os
 import sys
 from pathlib import Path
 
@@ -13,8 +12,7 @@ DEFAULT_MAIN = "index.js"
 
 FUNCTIONS_FRAMEWORK_VERSION = "^3.0.0"
 
-FUNCTION_ID = os.getenv("FUNCTION_ID", "handler")
-START_SCRIPT = f"functions-framework --target={FUNCTION_ID} --port=${{PORT:-8080}} --host=0.0.0.0"
+START_SCRIPT = f"functions-framework --target=handler --port=${{PORT:-8080}} --host=0.0.0.0"
 
 def main():
     """

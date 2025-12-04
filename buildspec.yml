@@ -1,25 +1,86 @@
 version: 0.2
 
 env:
-  variables:
-    SQS_QUEUE_URL: "https://sqs.ap-northeast-2.amazonaws.com/900253478827/cutty-x-infra-dev-faas-task-queue"
-    AWS_DEFAULT_REGION: "ap-northeast-2"
-    USER_ID: "test-user"
-    FUNCTION_ID: "test-func"
-    MESSAGE: "sqs-test-message"
+  shell: bash
 
 phases:
   install:
     commands:
-      - 'echo "Install: verify AWS CLI availability"'
-      - aws --version || { echo "aws CLI not found in environment"; exit 1; }
+      - echo "=== Install Cloud Native Buildpacks (pack CLI) ==="
+      - curl -sSL "https://github.com/buildpacks/pack/releases/download/v0.39.0/pack-v0.39.0-linux.tgz" | tar -C /usr/local/bin/ --no-same-owner -xzv pack
+      - pack version
+
+  pre_build:
+    commands:
+      - 'echo "=== Pre-build: resolve env, compute S3/ECR info, login to ECR ==="'
+      - |
+        # ---- Resolve AWS account & region ----
+        AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+        AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-$(aws configure get region)}"
+
+        echo "AWS_ACCOUNT_ID=${AWS_ACCOUNT_ID}"
+        echo "AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION}"
+        echo "PROJECT_NAME=${PROJECT_NAME}"
+        echo "USER_CODE_BUCKET=${USER_CODE_BUCKET}"
+        echo "SQS_URL=${SQS_URL}"
+        echo "ECR_REPO_NAME=${ECR_REPO_NAME}"
+        echo "USER_ID=${USER_ID}"
+        echo "FUNCTION_ID=${FUNCTION_ID}"
+        echo "IMAGE_TAG=${IMAGE_TAG}"
+        echo "CUSTOM_ROUTES=${CUSTOM_ROUTES}"
+
+        # ---- Compute S3 URL & ECR repo/tag ----
+        S3_URL="s3://${USER_CODE_BUCKET}/${USER_ID}/${FUNCTION_ID}"
+        IMAGE_REPO="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${ECR_REPO_NAME}"
+        IMAGE="${IMAGE_REPO}:${FUNCTION_ID}:${IMAGE_TAG}"
+
+        echo "S3_URL=${S3_URL}"
+        echo "IMAGE_REPO=${IMAGE_REPO}"
+        echo "IMAGE=${IMAGE}"
+
+        export AWS_ACCOUNT_ID AWS_DEFAULT_REGION S3_URL IMAGE_REPO IMAGE
+
+      - echo "Logging in to Amazon ECR..."
+      - |
+        aws ecr get-login-password --region "${AWS_DEFAULT_REGION}" \
+          | docker login --username AWS --password-stdin "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com"
+
+      - echo "Syncing function source from S3..."
+      - rm -rf app
+      - mkdir -p app
+      - aws s3 sync "${S3_URL}" ./app
+
+      - echo "Patching package.json..."
+      - cd app && python3 ../scripts/patch_package_json.py && cd ..
+
+      - echo "Contents of app directory:"
+      - ls -R ./app
 
   build:
     commands:
-      - echo "Sending test message to SQS queue"
-      - 'aws sqs send-message --queue-url "${SQS_QUEUE_URL}" --message-body "{\"test\": true, \"user_id\": \"${USER_ID}\", \"function_id\": \"${FUNCTION_ID}\", \"message\": \"${MESSAGE}\"}" --region "${AWS_DEFAULT_REGION}"'
-      - echo "SQS send-message command completed (check SQS for the message)."
+      - 'echo "=== Build: create container image with Cloud Native Buildpacks ==="'
+      - 'echo "Building image: ${IMAGE}"'
+      - pack build "${IMAGE}" --builder paketobuildpacks/builder:base --path ./app
+
+      - echo "Pushing image to Amazon ECR..."
+      - docker push "${IMAGE}"
+
+  post_build:
+    commands:
+      - 'echo "=== Post-build: send success message to SQS ==="'
+      - |
+        # ---- Build ECR ARN ----
+        ECR_ARN="arn:aws:ecr:${AWS_DEFAULT_REGION}:${AWS_ACCOUNT_ID}:repository/${ECR_REPO_NAME}:${FUNCTION_ID}:${IMAGE_TAG}"
+        echo "ECR_ARN=${ECR_ARN}"
+        echo "SQS_URL=${SQS_URL}"
+
+        # ---- Build SQS message body ----
+        MESSAGE_BODY="{\"userId\":\"${USER_ID}\",\"functionId\":\"${FUNCTION_ID}\",\"ecrImageArn\":\"${ECR_ARN}\",\"customRoutes\":\"${CUSTOM_ROUTES}\"}"
+        'echo "Sending message to SQS: ${MESSAGE_BODY}"'
+
+        aws sqs send-message \
+          --queue-url "${SQS_URL}" \
+          --message-body "${MESSAGE_BODY}"
 
 artifacts:
-  files:
-    - "**/*"
+  files: []
