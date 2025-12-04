@@ -2,7 +2,6 @@ version: 0.2
 
 env:
   variables:
-    # Provide SQS_QUEUE_URL via CodeBuild project or environment override when starting the build
     SQS_QUEUE_URL: "https://sqs.ap-northeast-2.amazonaws.com/900253478827/cutty-x-infra-dev-faas-result-queue"
     AWS_DEFAULT_REGION: "ap-northeast-2"
     USER_ID: "test-user"
@@ -12,17 +11,13 @@ env:
 phases:
   install:
     commands:
-      - echo "Install: verify AWS CLI availability"
+      - 'echo "Install: verify AWS CLI availability"'
       - aws --version || { echo "aws CLI not found in environment"; exit 1; }
 
   build:
     commands:
-      - echo "Sending test message to SQS queue: ${SQS_QUEUE_URL}"
-      - |
-        aws sqs send-message \
-          --queue-url "${SQS_QUEUE_URL}" \
-          --message-body "{\"test\": true, \"user_id\": \"${USER_ID}\", \"function_id\": \"${FUNCTION_ID}\", \"message\": \"${MESSAGE}\"}" \
-          --region "${AWS_DEFAULT_REGION}"
+      - echo "Sending test message to SQS queue"
+      - 'aws sqs send-message --queue-url "${SQS_QUEUE_URL}" --message-body "{\"test\": true, \"user_id\": \"${USER_ID}\", \"function_id\": \"${FUNCTION_ID}\", \"message\": \"${MESSAGE}\"}" --region "${AWS_DEFAULT_REGION}"'
       - echo "SQS send-message command completed (check SQS for the message)."
 
 artifacts:
