@@ -32,13 +32,15 @@ phases:
         # ---- Compute S3 URL & ECR repo/tag ----
         S3_URL="s3://${USER_CODE_BUCKET}/${USER_ID}/${FUNCTION_ID}"
         IMAGE_REPO="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${ECR_REPO_NAME}"
-        IMAGE="${IMAGE_REPO}:${FUNCTION_ID}:${IMAGE_TAG}"
+        IMAGE_TAG_FULL="${FUNCTION_ID}-${IMAGE_TAG}"
+        IMAGE="${IMAGE_REPO}:${IMAGE_TAG_FULL}"
 
         echo "S3_URL=${S3_URL}"
         echo "IMAGE_REPO=${IMAGE_REPO}"
+        echo "IMAGE_TAG_FULL=${IMAGE_TAG_FULL}"
         echo "IMAGE=${IMAGE}"
 
-        export AWS_ACCOUNT_ID AWS_DEFAULT_REGION S3_URL IMAGE_REPO IMAGE
+        export AWS_ACCOUNT_ID AWS_DEFAULT_REGION S3_URL IMAGE_REPO IMAGE_TAG_FULL IMAGE
 
       - echo "Logging in to Amazon ECR..."
       - |
@@ -60,7 +62,7 @@ phases:
     commands:
       - 'echo "=== Build: create container image with Cloud Native Buildpacks ==="'
       - 'echo "Building image: ${IMAGE}"'
-      - pack build "${IMAGE}" --builder paketobuildpacks/builder:base --path ./app
+      - pack build "${IMAGE}" --builder gcr.io/buildpacks/builder:latest --path ./app --pull-policy if-not-present
 
       - echo "Pushing image to Amazon ECR..."
       - docker push "${IMAGE}"
@@ -70,13 +72,13 @@ phases:
       - 'echo "=== Post-build: send success message to SQS ==="'
       - |
         # ---- Build ECR ARN ----
-        ECR_ARN="arn:aws:ecr:${AWS_DEFAULT_REGION}:${AWS_ACCOUNT_ID}:repository/${ECR_REPO_NAME}:${FUNCTION_ID}:${IMAGE_TAG}"
+        ECR_ARN="arn:aws:ecr:${AWS_DEFAULT_REGION}:${AWS_ACCOUNT_ID}:repository/${ECR_REPO_NAME}:${IMAGE_TAG_FULL}"
         echo "ECR_ARN=${ECR_ARN}"
         echo "SQS_URL=${SQS_URL}"
 
         # ---- Build SQS message body ----
         MESSAGE_BODY="{\"userId\":\"${USER_ID}\",\"functionId\":\"${FUNCTION_ID}\",\"ecrImageArn\":\"${ECR_ARN}\",\"customRoutes\":\"${CUSTOM_ROUTES}\"}"
-        'echo "Sending message to SQS: ${MESSAGE_BODY}"'
+        echo "Sending message to SQS: ${MESSAGE_BODY}"
 
         aws sqs send-message \
           --queue-url "${SQS_URL}" \
