@@ -2,7 +2,7 @@ version: 0.2
 
 env:
   variables:
-    SQS_QUEUE_URL: "https://sqs.ap-northeast-2.amazonaws.com/900253478827/cutty-x-infra-dev-faas-result-queue"
+    SQS_QUEUE_URL: "https://sqs.ap-northeast-2.amazonaws.com/900253478827/cutty-x-infra-dev-faas-task-queue"
     AWS_DEFAULT_REGION: "ap-northeast-2"
     USER_ID: "test-user"
     FUNCTION_ID: "test-func"
