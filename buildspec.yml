@@ -3,7 +3,7 @@ version: 0.2
 env:
   variables:
     # Provide SQS_QUEUE_URL via CodeBuild project or environment override when starting the build
-    SQS_QUEUE_URL: ""
+    SQS_QUEUE_URL: "https://sqs.ap-northeast-2.amazonaws.com/900253478827/cutty-x-infra-dev-faas-result-queue"
     AWS_DEFAULT_REGION: "ap-northeast-2"
     USER_ID: "test-user"
     FUNCTION_ID: "test-func"
