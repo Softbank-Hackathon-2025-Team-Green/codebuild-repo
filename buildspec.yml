@@ -30,7 +30,7 @@ phases:
         echo "CUSTOM_ROUTES=${CUSTOM_ROUTES}"
 
         # ---- Compute S3 URL & ECR repo/tag ----
-        S3_URL="s3://${USER_CODE_BUCKET}/${USER_ID}/${FUNCTION_ID}"
+        S3_URL="s3://${USER_CODE_BUCKET}/users/${USER_ID}/${FUNCTION_ID}"
         IMAGE_REPO="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${ECR_REPO_NAME}"
         IMAGE_TAG_FULL="${FUNCTION_ID}-${IMAGE_TAG}"
         IMAGE="${IMAGE_REPO}:${IMAGE_TAG_FULL}"
