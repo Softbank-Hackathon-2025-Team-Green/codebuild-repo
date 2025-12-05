@@ -90,9 +90,26 @@ phases:
       - 'echo "=== Post-build: send success message to SQS ==="'
       - |
         echo "SQS_URL=${SQS_URL}"
+        echo "Resolving image digest from ECR..."
 
-        # ---- Build SQS message body ----
-        MESSAGE_BODY="{\"userId\":\"${USER_ID}\",\"functionId\":\"${FUNCTION_ID}\",\"ecrImageUri\":\"${IMAGE}\",\"customRoutes\":\"${CUSTOM_ROUTES}\"}"
+        # ---- Resolve image digest from ECR ----
+        IMAGE_DIGEST=$(aws ecr describe-images \
+          --repository-name "${ECR_REPO_NAME}" \
+          --image-ids imageTag="${IMAGE_TAG_FULL}" \
+          --query 'imageDetails[0].imageDigest' \
+          --output text)
+
+        if [ -z "${IMAGE_DIGEST}" ] || [ "${IMAGE_DIGEST}" = "None" ]; then
+          echo "❌ ERROR: Failed to resolve image digest from ECR"
+          exit 1
+        fi
+
+        IMAGE_DIGEST_URI="${IMAGE_REPO}@${IMAGE_DIGEST}"
+        echo "IMAGE_DIGEST=${IMAGE_DIGEST}"
+        echo "IMAGE_DIGEST_URI=${IMAGE_DIGEST_URI}"
+
+        # ---- Build SQS message body (digest 기반 URI) ----
+        MESSAGE_BODY="{\"userId\":\"${USER_ID}\",\"functionId\":\"${FUNCTION_ID}\",\"ImageDigest\":\"${IMAGE_DIGEST_URI}\",\"customRoutes\":\"${CUSTOM_ROUTES}\"}"
         echo "Sending message to SQS: ${MESSAGE_BODY}"
 
         aws sqs send-message \
