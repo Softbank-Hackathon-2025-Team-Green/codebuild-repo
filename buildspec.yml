@@ -28,6 +28,7 @@ phases:
         echo "FUNCTION_ID=${FUNCTION_ID}"
         echo "IMAGE_TAG=${IMAGE_TAG}"
         echo "CUSTOM_ROUTES=${CUSTOM_ROUTES}"
+        echo "CUSTOM_ENV=${CUSTOM_ENV}"
 
         # ---- Compute S3 URL & ECR repo/tag ----
         S3_URL="s3://${USER_CODE_BUCKET}/users/${USER_ID}/functions/${FUNCTION_ID}"
@@ -55,23 +56,39 @@ phases:
       - echo "=== Validating S3 function source ==="
       - |
         if [ ! -f "./app/index.js" ]; then
-          echo "❌ ERROR: index.js not found in S3 source. Build aborted."
+          echo "ERROR: index.js not found in S3 source. Build aborted."
           echo "Checked path: ${S3_URL}"
           ls -al ./app
           exit 1
         fi
 
         if [ ! -f "./app/package.json" ]; then
-          echo "❌ ERROR: package.json not found in S3 source. Build aborted."
+          echo "ERROR: package.json not found in S3 source. Build aborted."
           echo "Checked path: ${S3_URL}"
           ls -al ./app
           exit 1
         fi
 
-        echo "✔ S3 source validation passed."
+        echo "S3 source validation passed."
 
       - echo "Patching package.json..."
       - cd app && python3 ../scripts/patch_package_json.py && cd ..
+
+      - echo "=== Processing custom environment variables ==="
+      - |
+        # ---- Parse CUSTOM_ENV using Python script ----
+        PACK_ENV_FLAGS=$(python3 scripts/parse_custom_env.py)
+
+        if [ $? -ne 0 ]; then
+          echo "ERROR: Failed to parse CUSTOM_ENV"
+          exit 1
+        fi
+
+        export PACK_ENV_FLAGS
+
+        if [ -n "${PACK_ENV_FLAGS}" ]; then
+          echo "Pack env flags: ${PACK_ENV_FLAGS}"
+        fi
 
       - echo "Contents of app directory:"
       - ls -R ./app
@@ -80,7 +97,15 @@ phases:
     commands:
       - 'echo "=== Build: create container image with Cloud Native Buildpacks ==="'
       - 'echo "Building image: ${IMAGE}"'
-      - pack build "${IMAGE}" --builder gcr.io/buildpacks/builder:latest --path ./app --pull-policy if-not-present
+      - |
+        # Build with custom environment variables if provided
+        if [ -n "${PACK_ENV_FLAGS}" ]; then
+          echo "Building with custom environment variables..."
+          pack build "${IMAGE}" --builder gcr.io/buildpacks/builder:latest --path ./app --pull-policy if-not-present ${PACK_ENV_FLAGS}
+        else
+          echo "Building without custom environment variables..."
+          pack build "${IMAGE}" --builder gcr.io/buildpacks/builder:latest --path ./app --pull-policy if-not-present
+        fi
 
       - echo "Pushing image to Amazon ECR..."
       - docker push "${IMAGE}"
@@ -100,7 +125,7 @@ phases:
           --output text)
 
         if [ -z "${IMAGE_DIGEST}" ] || [ "${IMAGE_DIGEST}" = "None" ]; then
-          echo "❌ ERROR: Failed to resolve image digest from ECR"
+          echo "ERROR: Failed to resolve image digest from ECR"
           exit 1
         fi
 
