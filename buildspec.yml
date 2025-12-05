@@ -30,7 +30,7 @@ phases:
         echo "CUSTOM_ROUTES=${CUSTOM_ROUTES}"
 
         # ---- Compute S3 URL & ECR repo/tag ----
-        S3_URL="s3://${USER_CODE_BUCKET}/users/${USER_ID}/${FUNCTION_ID}"
+        S3_URL="s3://${USER_CODE_BUCKET}/users/${USER_ID}/functions/${FUNCTION_ID}"
         IMAGE_REPO="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${ECR_REPO_NAME}"
         IMAGE_TAG_FULL="${FUNCTION_ID}-${IMAGE_TAG}"
         IMAGE="${IMAGE_REPO}:${IMAGE_TAG_FULL}"
@@ -51,6 +51,24 @@ phases:
       - rm -rf app
       - mkdir -p app
       - aws s3 sync "${S3_URL}" ./app
+
+      - echo "=== Validating S3 function source ==="
+      - |
+        if [ ! -f "./app/index.js" ]; then
+          echo "❌ ERROR: index.js not found in S3 source. Build aborted."
+          echo "Checked path: ${S3_URL}"
+          ls -al ./app
+          exit 1
+        fi
+
+        if [ ! -f "./app/package.json" ]; then
+          echo "❌ ERROR: package.json not found in S3 source. Build aborted."
+          echo "Checked path: ${S3_URL}"
+          ls -al ./app
+          exit 1
+        fi
+
+        echo "✔ S3 source validation passed."
 
       - echo "Patching package.json..."
       - cd app && python3 ../scripts/patch_package_json.py && cd ..
