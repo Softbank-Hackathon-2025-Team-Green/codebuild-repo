@@ -71,13 +71,10 @@ phases:
     commands:
       - 'echo "=== Post-build: send success message to SQS ==="'
       - |
-        # ---- Build ECR ARN ----
-        ECR_IMAGE_URI="arn:aws:ecr:${AWS_DEFAULT_REGION}:${AWS_ACCOUNT_ID}:repository/${ECR_REPO_NAME}:${IMAGE_TAG_FULL}"
-        echo "ECR_IMAGE_URI=${ECR_IMAGE_URI}"
         echo "SQS_URL=${SQS_URL}"
 
         # ---- Build SQS message body ----
-        MESSAGE_BODY="{\"userId\":\"${USER_ID}\",\"functionId\":\"${FUNCTION_ID}\",\"ecrImageArn\":\"${ECR_IMAGE_URI}\",\"customRoutes\":\"${CUSTOM_ROUTES}\"}"
+        MESSAGE_BODY="{\"userId\":\"${USER_ID}\",\"functionId\":\"${FUNCTION_ID}\",\"ecrImageUri\":\"${IMAGE}\",\"customRoutes\":\"${CUSTOM_ROUTES}\"}"
         echo "Sending message to SQS: ${MESSAGE_BODY}"
 
         aws sqs send-message \
