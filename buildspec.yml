@@ -111,8 +111,6 @@ phases:
         }
 
         # ---- Create .env file for runtime environment variables ----
-        cd app && python3 ../scripts/create_env_file.py && cd ..
-
         (
           cd app && python3 ../scripts/create_env_file.py
         )
