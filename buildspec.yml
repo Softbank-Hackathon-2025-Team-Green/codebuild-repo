@@ -29,6 +29,8 @@ phases:
         echo "IMAGE_TAG=${IMAGE_TAG}"
         echo "CUSTOM_ROUTES=${CUSTOM_ROUTES}"
         echo "CUSTOM_ENV=${CUSTOM_ENV}"
+        echo "AMPLIFY_DEPLOY_FAILED_URL=${AMPLIFY_DEPLOY_FAILED_URL}"
+
 
         # ---- Compute S3 URL & ECR repo/tag ----
         S3_URL="s3://${USER_CODE_BUCKET}/users/${USER_ID}/functions/${FUNCTION_ID}"
@@ -55,10 +57,28 @@ phases:
 
       - echo "=== Validating S3 function source ==="
       - |
+        notify_deploy_failed() {
+          local msg="$1"
+
+          if [ -z "${AMPLIFY_DEPLOY_FAILED_URL:-}" ]; then
+            echo "AMPLIFY_DEPLOY_FAILED_URL not set, skip deploy failed webhook."
+            return
+          fi
+
+          echo "Notifying Amplify /api/deploy/failed ..."
+
+          curl -s -X POST "${AMPLIFY_DEPLOY_FAILED_URL}" \
+            -H "Content-Type: application/json" \
+            -d "{\"userId\":\"${USER_ID}\",\"functionId\":\"${FUNCTION_ID}\",\"customRoutes\":\"${CUSTOM_ROUTES}\",\"message\":\"${msg}\",\"timestamp\":$(date +%s)}" \
+            || echo "WARN: failed to call Amplify deploy failed webhook"
+        }
+
         if [ ! -f "./app/index.js" ]; then
           echo "ERROR: index.js not found in S3 source. Build aborted."
           echo "Checked path: ${S3_URL}"
           ls -al ./app
+
+          notify_deploy_failed "index.js not found in S3 source"
           exit 1
         fi
 
@@ -74,18 +94,49 @@ phases:
 
       - echo "=== Processing custom environment variables ==="
       - |
+        notify_deploy_failed() {
+          local msg="$1"
+
+          if [ -z "${AMPLIFY_DEPLOY_FAILED_URL:-}" ]; then
+            echo "AMPLIFY_DEPLOY_FAILED_URL not set, skip deploy failed webhook."
+            return
+          fi
+
+          echo "Notifying Amplify /api/deploy/failed ..."
+
+          curl -s -X POST "${AMPLIFY_DEPLOY_FAILED_URL}" \
+            -H "Content-Type: application/json" \
+            -d "{\"userId\":\"${USER_ID}\",\"functionId\":\"${FUNCTION_ID}\",\"customRoutes\":\"${CUSTOM_ROUTES}\",\"message\":\"${msg}\",\"timestamp\":$(date +%s)}" \
+            || echo "WARN: failed to call Amplify deploy failed webhook"
+        }
+
         # ---- Create .env file for runtime environment variables ----
         cd app && python3 ../scripts/create_env_file.py && cd ..
 
-        if [ $? -ne 0 ]; then
+        (
+          cd app && python3 ../scripts/create_env_file.py
+        )
+        ENV_EXIT_CODE=$?
+
+        if [ ${ENV_EXIT_CODE} -ne 0 ]; then
           echo "ERROR: Failed to create .env file"
+          notify_deploy_failed "Failed to create .env file"
           exit 1
         fi
 
         if [ -f "./app/.env" ]; then
           echo ".env file created successfully"
           # Create wrapper to load .env at runtime
-          cd app && python3 ../scripts/create_env_wrapper.py && cd ..
+          (
+            cd app && python3 ../scripts/create_env_wrapper.py
+          )
+          WRAPPER_EXIT_CODE=$?
+
+          if [ ${WRAPPER_EXIT_CODE} -ne 0 ]; then
+            echo "ERROR: Failed to create env wrapper file"
+            notify_deploy_failed "Failed to create env wrapper file"
+            exit 1
+          fi
         fi
 
       - echo "Contents of app directory:"
@@ -93,17 +144,58 @@ phases:
 
   build:
     commands:
-      - 'echo "=== Build: create container image with Cloud Native Buildpacks ==="'
-      - 'echo "Building image: ${IMAGE}"'
-      - pack build "${IMAGE}" --builder gcr.io/buildpacks/builder:latest --path ./app --pull-policy if-not-present
+      - |
+        echo "=== Build: create container image with Cloud Native Buildpacks ==="
+        echo "Building image: ${IMAGE}"
 
-      - echo "Pushing image to Amazon ECR..."
-      - docker push "${IMAGE}"
+        notify_deploy_failed() {
+          local msg="$1"
+
+          if [ -z "${AMPLIFY_DEPLOY_FAILED_URL:-}" ]; then
+            echo "AMPLIFY_DEPLOY_FAILED_URL not set, skip deploy failed webhook."
+            return
+          fi
+
+          echo "Notifying Amplify /api/deploy/failed ..."
+
+          curl -s -X POST "${AMPLIFY_DEPLOY_FAILED_URL}" \
+            -H "Content-Type: application/json" \
+            -d "{\"userId\":\"${USER_ID}\",\"functionId\":\"${FUNCTION_ID}\",\"customRoutes\":\"${CUSTOM_ROUTES}\",\"message\":\"${msg}\",\"timestamp\":$(date +%s)}" \
+            || echo "WARN: failed to call Amplify deploy failed webhook"
+        }
+
+        # pack build 실패 시 Amplify로 실패 웹훅 전송
+        if ! pack build "${IMAGE}" --builder gcr.io/buildpacks/builder:latest --path ./app --pull-policy if-not-present; then
+          notify_deploy_failed "pack build failed"
+          exit 1
+        fi
+
+        echo "Pushing image to Amazon ECR..."
+        if ! docker push "${IMAGE}"; then
+          notify_deploy_failed "docker push failed"
+          exit 1
+        fi
 
   post_build:
     commands:
       - 'echo "=== Post-build: send success message to SQS ==="'
       - |
+        notify_deploy_failed() {
+          local msg="$1"
+
+          if [ -z "${AMPLIFY_DEPLOY_FAILED_URL:-}" ]; then
+            echo "AMPLIFY_DEPLOY_FAILED_URL not set, skip deploy failed webhook."
+            return
+          fi
+
+          echo "Notifying Amplify /api/deploy/failed ..."
+
+          curl -s -X POST "${AMPLIFY_DEPLOY_FAILED_URL}" \
+            -H "Content-Type: application/json" \
+            -d "{\"userId\":\"${USER_ID}\",\"functionId\":\"${FUNCTION_ID}\",\"customRoutes\":\"${CUSTOM_ROUTES}\",\"message\":\"${msg}\",\"timestamp\":$(date +%s)}" \
+            || echo "WARN: failed to call Amplify deploy failed webhook"
+        }
+        
         echo "SQS_URL=${SQS_URL}"
         echo "Resolving image digest from ECR..."
 
@@ -116,6 +208,7 @@ phases:
 
         if [ -z "${IMAGE_DIGEST}" ] || [ "${IMAGE_DIGEST}" = "None" ]; then
           echo "ERROR: Failed to resolve image digest from ECR"
+          notify_deploy_failed "Failed to resolve image digest from ECR"
           exit 1
         fi
 
