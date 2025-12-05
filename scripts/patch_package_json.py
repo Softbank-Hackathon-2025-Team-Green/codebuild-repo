@@ -11,7 +11,7 @@ DEFAULT_VERSION = "0.0.1"
 DEFAULT_MAIN = "index.js"
 
 FUNCTIONS_FRAMEWORK_VERSION = "^3.0.0"
-EXPRESS_VERSION = "^4.18.2"
+DOTENV_VERSION = "^16.0.0"
 
 START_SCRIPT = f"functions-framework --target=handler --port=${{PORT:-8080}} --host=0.0.0.0"
 
@@ -47,9 +47,9 @@ def main():
     if "dependencies" not in data:
         data["dependencies"] = {}
     data["dependencies"]["@google-cloud/functions-framework"] = FUNCTIONS_FRAMEWORK_VERSION
-    data["dependencies"]["express"] = EXPRESS_VERSION
+    data["dependencies"]["dotenv"] = DOTENV_VERSION
     print(f"✓ Added @google-cloud/functions-framework@{FUNCTIONS_FRAMEWORK_VERSION}")
-    print(f"✓ Added express@{EXPRESS_VERSION}")
+    print(f"✓ Added dotenv@{DOTENV_VERSION}")
 
     # Ensure scripts object exists and add start script
     if "scripts" not in data:

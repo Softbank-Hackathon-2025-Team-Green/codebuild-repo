@@ -74,18 +74,18 @@ phases:
 
       - echo "=== Processing custom environment variables ==="
       - |
-        # ---- Parse CUSTOM_ENV using Python script ----
-        PACK_ENV_FLAGS=$(python3 scripts/parse_custom_env.py)
+        # ---- Create .env file for runtime environment variables ----
+        cd app && python3 ../scripts/create_env_file.py && cd ..
 
         if [ $? -ne 0 ]; then
-          echo "ERROR: Failed to parse CUSTOM_ENV"
+          echo "ERROR: Failed to create .env file"
           exit 1
         fi
 
-        export PACK_ENV_FLAGS
-
-        if [ -n "${PACK_ENV_FLAGS}" ]; then
-          echo "Pack env flags: ${PACK_ENV_FLAGS}"
+        if [ -f "./app/.env" ]; then
+          echo ".env file created successfully"
+          # Create wrapper to load .env at runtime
+          cd app && python3 ../scripts/create_env_wrapper.py && cd ..
         fi
 
       - echo "Contents of app directory:"
@@ -95,15 +95,7 @@ phases:
     commands:
       - 'echo "=== Build: create container image with Cloud Native Buildpacks ==="'
       - 'echo "Building image: ${IMAGE}"'
-      - |
-        # Build with custom environment variables if provided
-        if [ -n "${PACK_ENV_FLAGS}" ]; then
-          echo "Building with custom environment variables..."
-          pack build "${IMAGE}" --builder gcr.io/buildpacks/builder:latest --path ./app --pull-policy if-not-present ${PACK_ENV_FLAGS}
-        else
-          echo "Building without custom environment variables..."
-          pack build "${IMAGE}" --builder gcr.io/buildpacks/builder:latest --path ./app --pull-policy if-not-present
-        fi
+      - pack build "${IMAGE}" --builder gcr.io/buildpacks/builder:latest --path ./app --pull-policy if-not-present
 
       - echo "Pushing image to Amazon ECR..."
       - docker push "${IMAGE}"
