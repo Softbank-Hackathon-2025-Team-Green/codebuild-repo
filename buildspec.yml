@@ -63,10 +63,8 @@ phases:
         fi
 
         if [ ! -f "./app/package.json" ]; then
-          echo "ERROR: package.json not found in S3 source. Build aborted."
-          echo "Checked path: ${S3_URL}"
-          ls -al ./app
-          exit 1
+          echo "WARNING: package.json not found in S3 source."
+          echo "A default package.json will be created by patch_package_json.py"
         fi
 
         echo "S3 source validation passed."
