@@ -32,7 +32,7 @@ const userFunction = require('./index-original.js');
 // Wrap the handler to capture request header
 exports.handler = async (req, res) => {
   // Get x-function-id from request headers
-  currentHeaderId = req.get('x-function-id') || req.headers['x-function-id'] || null;
+  currentHeaderId = req.get('x_request_id') || req.headers['x_request_id'] || null;
   
   try {
     // Call the user's handler
@@ -44,10 +44,7 @@ exports.handler = async (req, res) => {
     
     // Send error response if not already sent
     if (!res.headersSent) {
-      res.status(500).json({
-        error: 'Internal Server Error',
-        message: error.message
-      });
+      res.status(500).send('Internal Server Error');
     }
   } finally {
     // Reset header ID after request
