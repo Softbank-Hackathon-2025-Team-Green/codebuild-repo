@@ -89,6 +89,15 @@ phases:
 
         echo "S3 source validation passed."
 
+      - echo "=== Checking JavaScript Syntax Errors ==="
+      - |
+        if ! node -c ./app/index.js; then
+          echo "ERROR: JavaScript Syntax Error detected in index.js. Build aborted."
+          notify_deploy_failed "JavaScript Syntax Error in index.js"
+          exit 1
+        fi
+        echo "JavaScript syntax check passed."
+
       - echo "Patching package.json..."
       - cd app && python3 ../scripts/patch_package_json.py && cd ..
 
