@@ -24,14 +24,17 @@ phases:
         fi
       - pack version
       
-      - echo "=== Loading cached buildpack builder image ==="
+      - echo "=== Checking buildpack builder image ==="
       - |
-        if [ -f /tmp/buildpack-builder.tar ]; then
-          echo "Loading builder image from cache..."
-          docker load -i /tmp/buildpack-builder.tar
+        # Check if builder image exists, if not pull it once
+        if ! docker image inspect gcr.io/buildpacks/builder:latest >/dev/null 2>&1; then
+          echo "Builder image not found, pulling..."
+          docker pull gcr.io/buildpacks/builder:latest
         else
-          echo "No cached builder image found, will pull on first build"
+          echo "Builder image found in cache"
         fi
+        # Trust the builder to avoid re-pulling
+        pack config trusted-builders add gcr.io/buildpacks/builder:latest 2>/dev/null || true
 
   pre_build:
     commands:
@@ -211,7 +214,7 @@ phases:
         }
 
         # pack build 실패 시 Amplify로 실패 웹훅 전송
-        if ! pack build "${IMAGE}" --builder gcr.io/buildpacks/builder:latest --path ./app --pull-policy if-not-present; then
+        if ! pack build "${IMAGE}" --builder gcr.io/buildpacks/builder:latest --path ./app --pull-policy never --trust-builder; then
           notify_deploy_failed "pack build failed"
           exit 1
         fi
@@ -269,16 +272,6 @@ phases:
         aws sqs send-message \
           --queue-url "${SQS_URL}" \
           --message-body "${MESSAGE_BODY}"
-
-      - echo "=== Saving buildpack builder image to cache ==="
-      - |
-        if ! docker image inspect gcr.io/buildpacks/builder:latest >/dev/null 2>&1; then
-          echo "Builder image not found, skipping cache save"
-        else
-          echo "Saving builder image to /tmp/buildpack-builder.tar for next build..."
-          docker save -o /tmp/buildpack-builder.tar gcr.io/buildpacks/builder:latest
-          echo "Builder image cached successfully"
-        fi
 
 artifacts:
   files: []
