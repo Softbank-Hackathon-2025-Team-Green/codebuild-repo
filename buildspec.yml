@@ -76,21 +76,7 @@ phases:
 
       - echo "=== Validating S3 function source ==="
       - |
-        notify_deploy_failed() {
-          local msg="$1"
-
-          if [ -z "${AMPLIFY_DEPLOY_FAILED_URL:-}" ]; then
-            echo "AMPLIFY_DEPLOY_FAILED_URL not set, skip deploy failed webhook."
-            return
-          fi
-
-          echo "Notifying Amplify /api/deploy/failed ..."
-
-          curl -s -X POST "${AMPLIFY_DEPLOY_FAILED_URL}" \
-            -H "Content-Type: application/json" \
-            -d "{\"userId\":\"${USER_ID}\",\"functionId\":\"${FUNCTION_ID}\",\"customRoutes\":\"${CUSTOM_ROUTES}\",\"message\":\"${msg}\",\"timestamp\":$(date +%s)}" \
-            || echo "WARN: failed to call Amplify deploy failed webhook"
-        }
+        source scripts/common.sh
 
         if [ ! -f "./app/index.js" ]; then
           echo "ERROR: index.js not found in S3 source. Build aborted."
@@ -110,21 +96,7 @@ phases:
 
       - echo "=== Checking JavaScript Syntax Errors ==="
       - |
-        notify_deploy_failed() {
-          local msg="$1"
-
-          if [ -z "${AMPLIFY_DEPLOY_FAILED_URL:-}" ]; then
-            echo "AMPLIFY_DEPLOY_FAILED_URL not set, skip deploy failed webhook."
-            return
-          fi
-
-          echo "Notifying Amplify /api/deploy/failed ..."
-
-          curl -s -X POST "${AMPLIFY_DEPLOY_FAILED_URL}" \
-            -H "Content-Type: application/json" \
-            -d "{\"userId\":\"${USER_ID}\",\"functionId\":\"${FUNCTION_ID}\",\"customRoutes\":\"${CUSTOM_ROUTES}\",\"message\":\"${msg}\",\"timestamp\":$(date +%s)}" \
-            || echo "WARN: failed to call Amplify deploy failed webhook"
-        }
+        source scripts/common.sh
 
         if ! node -c ./app/index.js; then
           echo "ERROR: JavaScript Syntax Error detected in index.js. Build aborted."
@@ -138,21 +110,7 @@ phases:
 
       - echo "=== Processing custom environment variables ==="
       - |
-        notify_deploy_failed() {
-          local msg="$1"
-
-          if [ -z "${AMPLIFY_DEPLOY_FAILED_URL:-}" ]; then
-            echo "AMPLIFY_DEPLOY_FAILED_URL not set, skip deploy failed webhook."
-            return
-          fi
-
-          echo "Notifying Amplify /api/deploy/failed ..."
-
-          curl -s -X POST "${AMPLIFY_DEPLOY_FAILED_URL}" \
-            -H "Content-Type: application/json" \
-            -d "{\"userId\":\"${USER_ID}\",\"functionId\":\"${FUNCTION_ID}\",\"customRoutes\":\"${CUSTOM_ROUTES}\",\"message\":\"${msg}\",\"timestamp\":$(date +%s)}" \
-            || echo "WARN: failed to call Amplify deploy failed webhook"
-        }
+        source scripts/common.sh
 
         # ---- Create .env file for runtime environment variables ----
         (
@@ -187,24 +145,10 @@ phases:
   build:
     commands:
       - |
+        source scripts/common.sh
+
         echo "=== Build: create container image with Cloud Native Buildpacks ==="
         echo "Building image: ${IMAGE}"
-
-        notify_deploy_failed() {
-          local msg="$1"
-
-          if [ -z "${AMPLIFY_DEPLOY_FAILED_URL:-}" ]; then
-            echo "AMPLIFY_DEPLOY_FAILED_URL not set, skip deploy failed webhook."
-            return
-          fi
-
-          echo "Notifying Amplify /api/deploy/failed ..."
-
-          curl -s -X POST "${AMPLIFY_DEPLOY_FAILED_URL}" \
-            -H "Content-Type: application/json" \
-            -d "{\"userId\":\"${USER_ID}\",\"functionId\":\"${FUNCTION_ID}\",\"customRoutes\":\"${CUSTOM_ROUTES}\",\"message\":\"${msg}\",\"timestamp\":$(date +%s)}" \
-            || echo "WARN: failed to call Amplify deploy failed webhook"
-        }
 
         # pack build 실패 시 Amplify로 실패 웹훅 전송
         if ! pack build "${IMAGE}" --builder gcr.io/buildpacks/builder:latest --path ./app --pull-policy if-not-present --trust-builder; then
@@ -222,21 +166,7 @@ phases:
     commands:
       - 'echo "=== Post-build: send success message to SQS ==="'
       - |
-        notify_deploy_failed() {
-          local msg="$1"
-
-          if [ -z "${AMPLIFY_DEPLOY_FAILED_URL:-}" ]; then
-            echo "AMPLIFY_DEPLOY_FAILED_URL not set, skip deploy failed webhook."
-            return
-          fi
-
-          echo "Notifying Amplify /api/deploy/failed ..."
-
-          curl -s -X POST "${AMPLIFY_DEPLOY_FAILED_URL}" \
-            -H "Content-Type: application/json" \
-            -d "{\"userId\":\"${USER_ID}\",\"functionId\":\"${FUNCTION_ID}\",\"customRoutes\":\"${CUSTOM_ROUTES}\",\"message\":\"${msg}\",\"timestamp\":$(date +%s)}" \
-            || echo "WARN: failed to call Amplify deploy failed webhook"
-        }
+        source scripts/common.sh
         
         echo "SQS_URL=${SQS_URL}"
         echo "Resolving image digest from ECR..."
