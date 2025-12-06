@@ -32,7 +32,7 @@ const userFunction = require('./index-original.js');
 // Wrap the handler to capture request header
 exports.handler = async (req, res) => {
   // Get x-function-id from request headers
-  currentHeaderId = req.get('x_request_id') || req.headers['x_request_id'] || null;
+  currentHeaderId = req.get('X-Request-ID') || req.headers['X-Request-ID'] || null;
   
   try {
     // Call the user's handler
