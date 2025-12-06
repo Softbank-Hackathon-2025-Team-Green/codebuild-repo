@@ -17,7 +17,7 @@ require('dotenv').config();
 const originalLog = console.log;
 let currentHeaderId = null;
 
-// Override console.log to prepend x-header-id
+// Override console.log to prepend x-function-id
 console.log = function(...args) {
   if (currentHeaderId) {
     originalLog(`[${currentHeaderId}]`, ...args);
@@ -31,15 +31,15 @@ const userFunction = require('./index-original.js');
 
 // Wrap the handler to capture request header
 exports.handler = async (req, res) => {
-  // Get x-header-id from request headers
-  currentHeaderId = req.get('x-header-id') || req.headers['x-header-id'] || null;
+  // Get x-function-id from request headers
+  currentHeaderId = req.get('x-function-id') || req.headers['x-function-id'] || null;
   
   try {
     // Call the user's handler
     const result = await userFunction.handler(req, res);
     return result;
   } catch (error) {
-    // Log error with x-header-id prefix
+    // Log error with x-function-id prefix
     console.log('Runtime error:', error.message);
     
     // Send error response if not already sent
