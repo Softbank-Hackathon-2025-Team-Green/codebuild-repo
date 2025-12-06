@@ -34,13 +34,25 @@ exports.handler = async (req, res) => {
   // Get x-header-id from request headers
   currentHeaderId = req.get('x-header-id') || req.headers['x-header-id'] || null;
   
-  // Call the user's handler
-  const result = await userFunction.handler(req, res);
-  
-  // Reset header ID after request
-  currentHeaderId = null;
-  
-  return result;
+  try {
+    // Call the user's handler
+    const result = await userFunction.handler(req, res);
+    return result;
+  } catch (error) {
+    // Log error with x-header-id prefix
+    console.log('Runtime error:', error.message);
+    
+    // Send error response if not already sent
+    if (!res.headersSent) {
+      res.status(500).json({
+        error: 'Internal Server Error',
+        message: error.message
+      });
+    }
+  } finally {
+    // Reset header ID after request
+    currentHeaderId = null;
+  }
 };
 """
 
