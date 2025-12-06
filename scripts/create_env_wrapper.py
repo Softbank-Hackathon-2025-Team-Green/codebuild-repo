@@ -13,11 +13,35 @@ USER_INDEX_PATH = Path("index.js")
 WRAPPER_TEMPLATE = """// Auto-generated wrapper to load .env file
 require('dotenv').config();
 
+// Store original console.log
+const originalLog = console.log;
+let currentHeaderId = null;
+
+// Override console.log to prepend x-header-id
+console.log = function(...args) {
+  if (currentHeaderId) {
+    originalLog(`[${currentHeaderId}]`, ...args);
+  } else {
+    originalLog(...args);
+  }
+};
+
 // Load user's function
 const userFunction = require('./index-original.js');
 
-// Export the handler
-exports.handler = userFunction.handler;
+// Wrap the handler to capture request header
+exports.handler = async (req, res) => {
+  // Get x-header-id from request headers
+  currentHeaderId = req.get('x-header-id') || req.headers['x-header-id'] || null;
+  
+  // Call the user's handler
+  const result = await userFunction.handler(req, res);
+  
+  // Reset header ID after request
+  currentHeaderId = null;
+  
+  return result;
+};
 """
 
 def main():
