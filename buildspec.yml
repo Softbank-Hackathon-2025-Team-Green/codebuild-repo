@@ -3,11 +3,25 @@ version: 0.2
 env:
   shell: bash
 
+# Cache configuration
+cache:
+  paths:
+    - '/usr/local/bin/pack'           # pack CLI binary
+    - '/var/lib/docker/**/*'          # Docker images including builder
+    - '/root/.pack/**/*'              # Pack build cache
+    - '/root/.docker/**/*'            # Docker config/cache
+
 phases:
   install:
     commands:
       - echo "=== Install Cloud Native Buildpacks (pack CLI) ==="
-      - curl -sSL "https://github.com/buildpacks/pack/releases/download/v0.39.0/pack-v0.39.0-linux.tgz" | tar -C /usr/local/bin/ --no-same-owner -xzv pack
+      - |
+        if [ ! -f /usr/local/bin/pack ]; then
+          echo "Downloading pack CLI..."
+          curl -sSL "https://github.com/buildpacks/pack/releases/download/v0.39.0/pack-v0.39.0-linux.tgz" | tar -C /usr/local/bin/ --no-same-owner -xzv pack
+        else
+          echo "pack CLI found in cache, skipping download"
+        fi
       - pack version
 
   pre_build:
