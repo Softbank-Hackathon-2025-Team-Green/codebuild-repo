@@ -33,6 +33,15 @@ phases:
         else
           echo "Builder image found in cache"
         fi
+        
+        # Check if run image exists, if not pull it once
+        if ! docker image inspect gcr.io/buildpacks/google-22/run >/dev/null 2>&1; then
+          echo "Run image not found, pulling..."
+          docker pull gcr.io/buildpacks/google-22/run
+        else
+          echo "Run image found in cache"
+        fi
+        
         # Trust the builder to avoid re-pulling
         pack config trusted-builders add gcr.io/buildpacks/builder:latest 2>/dev/null || true
 
