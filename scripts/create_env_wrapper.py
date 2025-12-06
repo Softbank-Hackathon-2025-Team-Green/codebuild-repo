@@ -20,7 +20,7 @@ let currentHeaderId = null;
 // Override console.log to prepend x-function-id
 console.log = function(...args) {
   if (currentHeaderId) {
-    originalLog(`[${currentHeaderId}]`, ...args);
+    originalLog(`["x_request_id":"${currentHeaderId}"]`, ...args);
   } else {
     originalLog(...args);
   }

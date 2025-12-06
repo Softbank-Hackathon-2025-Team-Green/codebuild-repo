@@ -7,7 +7,7 @@ env:
 cache:
   paths:
     - '/usr/local/bin/pack'           # pack CLI binary
-    - '/var/lib/docker/**/*'          # Docker images including builder
+    - '/tmp/buildpack-builder.tar'    # Cached builder image
     - '/root/.pack/**/*'              # Pack build cache
     - '/root/.docker/**/*'            # Docker config/cache
 
@@ -23,6 +23,15 @@ phases:
           echo "pack CLI found in cache, skipping download"
         fi
       - pack version
+      
+      - echo "=== Loading cached buildpack builder image ==="
+      - |
+        if [ -f /tmp/buildpack-builder.tar ]; then
+          echo "Loading builder image from cache..."
+          docker load -i /tmp/buildpack-builder.tar
+        else
+          echo "No cached builder image found, will pull on first build"
+        fi
 
   pre_build:
     commands:
@@ -260,6 +269,16 @@ phases:
         aws sqs send-message \
           --queue-url "${SQS_URL}" \
           --message-body "${MESSAGE_BODY}"
+
+      - echo "=== Saving buildpack builder image to cache ==="
+      - |
+        if ! docker image inspect gcr.io/buildpacks/builder:latest >/dev/null 2>&1; then
+          echo "Builder image not found, skipping cache save"
+        else
+          echo "Saving builder image to /tmp/buildpack-builder.tar for next build..."
+          docker save -o /tmp/buildpack-builder.tar gcr.io/buildpacks/builder:latest
+          echo "Builder image cached successfully"
+        fi
 
 artifacts:
   files: []
