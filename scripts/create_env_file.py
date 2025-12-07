@@ -27,8 +27,9 @@ def main():
     
     # Handle empty or missing CUSTOM_ENV
     if not custom_env or custom_env == "[]":
-        print("No custom environment variables provided")
-        # Create empty .env file or skip
+        print("No custom environment variables provided, creating empty .env file")
+        ENV_FILE_PATH.write_text("", encoding="utf-8")
+        print("✓ Created empty .env file")
         sys.exit(0)
     
     try:
