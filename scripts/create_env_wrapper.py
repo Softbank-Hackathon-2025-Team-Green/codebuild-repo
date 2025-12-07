@@ -16,11 +16,12 @@ require('dotenv').config();
 // Store original console.log
 const originalLog = console.log;
 let currentHeaderId = null;
+let failed = "";
 
 // Override console.log to prepend x-function-id
 console.log = function(...args) {
   if (currentHeaderId) {
-    originalLog(`["x_request_id":"${currentHeaderId}"]`, ...args);
+    originalLog(`[${currentHeaderId}]`, ...args);
   } else {
     originalLog(...args);
   }
@@ -33,21 +34,27 @@ const userFunction = require('./index-original.js');
 exports.handler = async (req, res) => {
   // Get x-function-id from request headers
   currentHeaderId = req.get('X-Request-ID') || req.headers['X-Request-ID'] || null;
-  
+  currentHeaderId = currentHeaderId.toString().split(',')[0].trim();
   try {
+    console.log("[INTERNAL][START]");
     // Call the user's handler
     const result = await userFunction.handler(req, res);
     return result;
   } catch (error) {
     // Log error with x-function-id prefix
     console.log('Runtime error:', error.message);
-    
+    failed = error.message;
     // Send error response if not already sent
     if (!res.headersSent) {
       res.status(500).send('Internal Server Error');
     }
   } finally {
     // Reset header ID after request
+    if(failed){
+      console.log(`[INTERNAL][FINISHED] FAILED:${failed}`);
+    } else {
+      console.log('[INTERNAL][FINISHED] SUCCESS');
+    }
     currentHeaderId = null;
   }
 };
