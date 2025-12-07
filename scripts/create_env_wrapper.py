@@ -42,7 +42,6 @@ exports.handler = async (req, res) => {
     return result;
   } catch (error) {
     // Log error with x-function-id prefix
-    console.log('Runtime error:', error.message);
     failed = error.message;
     // Send error response if not already sent
     if (!res.headersSent) {
