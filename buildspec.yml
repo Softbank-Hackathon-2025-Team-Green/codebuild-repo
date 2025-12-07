@@ -7,9 +7,13 @@ env:
 
 # Cache configuration
 cache:
+  type: LOCAL
+  modes:
+    - LOCAL_DOCKER_LAYER_CACHE
+    - LOCAL_SOURCE_CACHE
+    - LOCAL_CUSTOM_CACHE
   paths:
     - '/usr/local/bin/pack'  # pack CLI binary
-    - '/tmp/buildpack-images.tar'  # Cached buildpack images
     - '/var/lib/docker/volumes/**/*'  # Docker volumes used by pack
 
 phases:
@@ -24,16 +28,6 @@ phases:
           echo "pack CLI found in cache, skipping download"
         fi
       - pack version
-      
-      - echo "=== Loading cached buildpack images ==="
-      - |
-        if [ -f /tmp/buildpack-images.tar ]; then
-          echo "Loading buildpack images from cache..."
-          docker load -i /tmp/buildpack-images.tar
-          echo "Cached images loaded successfully"
-        else
-          echo "No cached buildpack images found, will pull during build"
-        fi
 
   pre_build:
     commands:
@@ -271,18 +265,6 @@ phases:
         aws sqs send-message \
           --queue-url "${SQS_URL}" \
           --message-body "${MESSAGE_BODY}"
-
-      - echo "=== Saving buildpack images to cache ==="
-      - |
-        echo "Saving buildpack builder and run images..."
-        docker save -o /tmp/buildpack-images.tar \
-          gcr.io/buildpacks/builder:latest \
-          gcr.io/buildpacks/google-22/run 2>/dev/null || echo "Images not found, skipping cache save"
-        
-        if [ -f /tmp/buildpack-images.tar ]; then
-          echo "Buildpack images cached successfully"
-          ls -lh /tmp/buildpack-images.tar
-        fi
 
 artifacts:
   files: []
