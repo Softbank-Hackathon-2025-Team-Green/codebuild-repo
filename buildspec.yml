@@ -2,12 +2,15 @@ version: 0.2
 
 env:
   shell: bash
+  variables:
+    PACK_VOLUME_KEY: "codebuild-pack-cache"  # Consistent key for pack volume caching
 
 # Cache configuration
 cache:
   paths:
     - '/usr/local/bin/pack'  # pack CLI binary
     - '/tmp/buildpack-images.tar'  # Cached buildpack images
+    - '/var/lib/docker/volumes/**/*'  # Docker volumes used by pack
 
 phases:
   install:
