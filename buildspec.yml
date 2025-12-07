@@ -7,6 +7,7 @@ env:
 cache:
   paths:
     - '/usr/local/bin/pack'  # pack CLI binary
+    - '/tmp/buildpack-images.tar'  # Cached buildpack images
 
 phases:
   install:
@@ -20,6 +21,16 @@ phases:
           echo "pack CLI found in cache, skipping download"
         fi
       - pack version
+      
+      - echo "=== Loading cached buildpack images ==="
+      - |
+        if [ -f /tmp/buildpack-images.tar ]; then
+          echo "Loading buildpack images from cache..."
+          docker load -i /tmp/buildpack-images.tar
+          echo "Cached images loaded successfully"
+        else
+          echo "No cached buildpack images found, will pull during build"
+        fi
 
   pre_build:
     commands:
@@ -198,33 +209,11 @@ phases:
             || echo "WARN: failed to call Amplify deploy failed webhook"
         }
 
-        # Log Docker image storage locations
-        echo "=== Checking Docker image storage ==="
-        echo "Docker images before build:"
-        docker images | grep -E "(buildpacks|google-22)" || echo "No buildpack images found"
-        
-        echo "Docker root dir:"
-        docker info | grep "Docker Root Dir"
-        
-        echo "Checking common Docker storage locations:"
-        ls -lah /var/lib/docker/ 2>/dev/null || echo "/var/lib/docker/ not accessible"
-        ls -lah /var/lib/docker/overlay2/ 2>/dev/null || echo "/var/lib/docker/overlay2/ not accessible"
-        ls -lah /var/lib/docker/image/ 2>/dev/null || echo "/var/lib/docker/image/ not accessible"
-
-        echo "=== Running pack build ==="
         # pack build 실패 시 Amplify로 실패 웹훅 전송
-        if ! pack build "${IMAGE}" --builder gcr.io/buildpacks/builder:latest --path ./app --pull-policy if-not-present; then
+        if ! pack build "${IMAGE}" --builder gcr.io/buildpacks/builder:latest --path ./app --pull-policy if-not-present --trust-builder; then
           notify_deploy_failed "pack build failed"
           exit 1
         fi
-
-        echo "=== After pack build ==="
-        echo "Docker images after build:"
-        docker images | grep -E "(buildpacks|google-22)" || echo "No buildpack images found"
-        
-        echo "Checking image layers:"
-        docker inspect gcr.io/buildpacks/builder:latest --format='{{.GraphDriver.Data.UpperDir}}' 2>/dev/null || echo "Cannot inspect builder image"
-        docker inspect gcr.io/buildpacks/google-22/run --format='{{.GraphDriver.Data.UpperDir}}' 2>/dev/null || echo "Cannot inspect run image"
 
         echo "Pushing image to Amazon ECR..."
         if ! docker push "${IMAGE}"; then
@@ -279,6 +268,18 @@ phases:
         aws sqs send-message \
           --queue-url "${SQS_URL}" \
           --message-body "${MESSAGE_BODY}"
+
+      - echo "=== Saving buildpack images to cache ==="
+      - |
+        echo "Saving buildpack builder and run images..."
+        docker save -o /tmp/buildpack-images.tar \
+          gcr.io/buildpacks/builder:latest \
+          gcr.io/buildpacks/google-22/run 2>/dev/null || echo "Images not found, skipping cache save"
+        
+        if [ -f /tmp/buildpack-images.tar ]; then
+          echo "Buildpack images cached successfully"
+          ls -lh /tmp/buildpack-images.tar
+        fi
 
 artifacts:
   files: []
