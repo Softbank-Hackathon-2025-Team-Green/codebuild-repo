@@ -1,17 +1,29 @@
-#!/usr/bin/env bash
+#!/bin/bash
+
+export -f notify_deploy_failed
 
 notify_deploy_failed() {
-  local msg="$1"
+  local reason="$1"
+  echo "[notify_deploy_failed] INFO: Triggering failure notification. Reason: ${reason}"
 
   if [ -z "${AMPLIFY_DEPLOY_FAILED_URL:-}" ]; then
-    echo "AMPLIFY_DEPLOY_FAILED_URL not set, skip deploy failed webhook. message=${msg}"
-    return
+    echo "[notify_deploy_failed] AMPLIFY_DEPLOY_FAILED_URL not set, skipping webhook notify"
+    return 0
   fi
 
-  echo "Notifying Amplify /api/deploy/failed ..."
+  local safe_reason="${reason//\"/\'}"
+  local ts
+  ts="$(date +%s)"
 
-  curl -s -X POST "${AMPLIFY_DEPLOY_FAILED_URL}" \
+  local payload
+  payload=$(printf '{"userId":"%s","functionId":"%s","customRoutes":"%s","message":"%s","timestamp":%s}' \
+    "${USER_ID:-}" "${FUNCTION_ID:-}" "${CUSTOM_ROUTES:-}" "${safe_reason}" "${ts}")
+
+  echo "[notify_deploy_failed] INFO: Sending webhook to Amplify..."
+
+  curl -sS -X POST \
     -H "Content-Type: application/json" \
-    -d "{\"userId\":\"${USER_ID}\",\"functionId\":\"${FUNCTION_ID}\",\"customRoutes\":\"${CUSTOM_ROUTES}\",\"message\":\"${msg}\",\"timestamp\":$(date +%s)}" \
-    || echo "WARN: failed to call Amplify deploy failed webhook"
+    -d "${payload}" \
+    "${AMPLIFY_DEPLOY_FAILED_URL}" \
+    || echo "[notify_deploy_failed] WARN: failed to call Amplify webhook"
 }

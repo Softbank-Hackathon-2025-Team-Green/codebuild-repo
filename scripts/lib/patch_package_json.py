@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 
 PACKAGE_PATH = Path("package.json")
+STEP = "[patch_package_json]"
 
 DEFAULT_NAME = "user-function"
 DEFAULT_VERSION = "0.0.1"
@@ -15,54 +16,64 @@ DOTENV_VERSION = "^16.0.0"
 
 START_SCRIPT = f"functions-framework --target=handler --port=${{PORT:-8080}} --host=0.0.0.0"
 
+def log_info(msg):
+    print(f"{STEP} INFO: {msg}", file=sys.stderr)
+    
+def log_warn(msg):
+    print(f"{STEP} WARN: {msg}", file=sys.stderr)
+
+def log_error(msg):
+    print(f"{STEP} ERROR: {msg}", file=sys.stderr)
+
 def main():
     """
-    Load or create package.json, ensure @google-cloud/functions-framework dependency,
-    ensure start script for Cloud Functions Framework, and write back to file.
-    
-    Process:
-      1. Load existing package.json or create default skeleton
-      2. Add @google-cloud/functions-framework to dependencies
-      3. Add start script to invoke functions-framework CLI
-      4. Write updated package.json back to disk
+    Load or create package.json, ensure dependencies and start script exist.
     """
-    # Try to load existing package.json; if invalid or missing, use defaults
+
+    # 1. Load or Create package.json
     if PACKAGE_PATH.exists():
         try:
             content = PACKAGE_PATH.read_text(encoding="utf-8")
             data = json.loads(content)
-            print("✓ Loaded existing package.json")
+            log_info("Loaded existing package.json")
         except json.JSONDecodeError as exc:
-            print(f"⚠ Invalid JSON in package.json: {exc}")
-            print("  Creating new default skeleton...")
+            log_warn(f"Invalid JSON in package.json: {exc}")
+            log_info("Creating new default skeleton...")
             data = _create_default_package_json()
         except Exception as exc:
-            print(f"✗ Error reading package.json: {exc}", file=sys.stderr)
+            log_error(f"Error reading package.json: {exc}")
             sys.exit(1)
     else:
-        print("✓ package.json not found; creating default skeleton")
+        log_info("package.json not found; creating default skeleton")
         data = _create_default_package_json()
 
-    # Ensure dependencies object exists and add Functions Framework
+        
+    # 2. Ensure Dependencies
     if "dependencies" not in data:
         data["dependencies"] = {}
+
+    # Always overwrite/ensure these specific versions required for the platform
     data["dependencies"]["@google-cloud/functions-framework"] = FUNCTIONS_FRAMEWORK_VERSION
     data["dependencies"]["dotenv"] = DOTENV_VERSION
-    print(f"✓ Added @google-cloud/functions-framework@{FUNCTIONS_FRAMEWORK_VERSION}")
-    print(f"✓ Added dotenv@{DOTENV_VERSION}")
+    
+    log_info(f"Ensured dependency: @google-cloud/functions-framework@{FUNCTIONS_FRAMEWORK_VERSION}")
+    log_info(f"Ensured dependency: dotenv@{DOTENV_VERSION}")
 
-    # Ensure scripts object exists and add start script
+
+    # 3. Ensure Start Script
     if "scripts" not in data:
         data["scripts"] = {}
-    data["scripts"]["start"] = START_SCRIPT
-    print(f"✓ Added start script: {START_SCRIPT}")
 
-    # Write back to file with pretty formatting
+    data["scripts"]["start"] = START_SCRIPT
+    log_info(f"Ensured start script: {START_SCRIPT}")
+
+
+    # 4. Write back to file
     try:
         PACKAGE_PATH.write_text(json.dumps(data, indent=2), encoding="utf-8")
-        print(f"✅ Successfully patched package.json")
+        log_info("Successfully patched package.json")
     except Exception as exc:
-        print(f"✗ Error writing package.json: {exc}", file=sys.stderr)
+        log_error(f"Error writing package.json: {exc}")
         sys.exit(1)
 
 
