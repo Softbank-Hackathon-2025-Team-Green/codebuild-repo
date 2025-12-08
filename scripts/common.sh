@@ -1,6 +1,8 @@
 #!/bin/bash
 
-export -f notify_deploy_failed
+if [ -f "/tmp/build.env" ]; then
+  source "/tmp/build.env"
+fi
 
 notify_deploy_failed() {
   local reason="$1"
@@ -27,3 +29,5 @@ notify_deploy_failed() {
     "${AMPLIFY_DEPLOY_FAILED_URL}" \
     || echo "[notify_deploy_failed] WARN: failed to call Amplify webhook"
 }
+
+export -f notify_deploy_failed
