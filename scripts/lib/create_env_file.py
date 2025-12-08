@@ -6,6 +6,16 @@ import sys
 from pathlib import Path
 
 ENV_FILE_PATH = Path(".env")
+STEP = "[create_env_file]"
+
+def log_info(msg):
+    print(f"{STEP} INFO: {msg}", file=sys.stderr)
+
+def log_warn(msg):
+    print(f"{STEP} WARN: {msg}", file=sys.stderr)
+
+def log_error(msg):
+    print(f"{STEP} ERROR: {msg}", file=sys.stderr)
 
 def main():
     """
@@ -27,9 +37,9 @@ def main():
     
     # Handle empty or missing CUSTOM_ENV
     if not custom_env or custom_env == "[]":
-        print("No custom environment variables provided, creating empty .env file")
+        log_info("No custom environment variables provided, creating empty .env file")
         ENV_FILE_PATH.write_text("", encoding="utf-8")
-        print("✓ Created empty .env file")
+        log_info("Created empty .env file")
         sys.exit(0)
     
     try:
@@ -38,27 +48,27 @@ def main():
         
         # Validate it's an array
         if not isinstance(data, list):
-            print(f"ERROR: CUSTOM_ENV must be a JSON array, got {type(data).__name__}", file=sys.stderr)
-            print(f"Expected format: [{{\"key\": \"NAME\", \"value\": \"val\"}}, ...]", file=sys.stderr)
+            log_error(f"CUSTOM_ENV must be a JSON array, got {type(data).__name__}")
+            log_error(f"Expected format: [{{\"key\": \"NAME\", \"value\": \"val\"}}, ...]")
             sys.exit(1)
         
         # Build .env file content
         env_lines = []
         for item in data:
             if not isinstance(item, dict):
-                print(f"WARNING: Skipping invalid item: {item}", file=sys.stderr)
+                log_warn(f"Skipping invalid item (not a dict): {item}")
                 continue
             
             key = item.get("key")
             value = item.get("value")
             
             if not key or value is None:
-                print(f"WARNING: Skipping item missing 'key' or 'value': {item}", file=sys.stderr)
+                log_warn(f"Skipping item missing 'key' or 'value': {item}")
                 continue
             
             # Validate key is a valid environment variable name
             if not key.replace("_", "").isalnum():
-                print(f"WARNING: Skipping invalid environment variable name: {key}", file=sys.stderr)
+                log_warn(f"Skipping invalid environment variable name: {key}")
                 continue
             
             # Escape special characters in value
@@ -71,25 +81,25 @@ def main():
                 env_lines.append(f"{key}={value}")
         
         if not env_lines:
-            print("No valid environment variables found")
+            log_info("No valid environment variables found")
             sys.exit(0)
         
         # Write to .env file
         ENV_FILE_PATH.write_text("\n".join(env_lines) + "\n", encoding="utf-8")
-        print(f"✓ Created .env file with {len(env_lines)} variable(s)")
+        log_info(f"Created .env file with {len(env_lines)} variable(s)")
         
         # Display contents for debugging
-        print("Contents:")
-        for line in env_lines:
-            print(f"  {line}")
+        # print("Contents:")
+        # for line in env_lines:
+        #     print(f"  {line}")
         
     except json.JSONDecodeError as exc:
-        print(f"ERROR: CUSTOM_ENV is not valid JSON format", file=sys.stderr)
-        print(f"  Parse error: {exc}", file=sys.stderr)
-        print(f"  Received: {custom_env}", file=sys.stderr)
+        log_error(f"CUSTOM_ENV is not valid JSON format: {exc}")
+        log_error(f"  Parse error: {exc}")
+        log_error(f"  Received: {custom_env}")
         sys.exit(1)
     except Exception as exc:
-        print(f"ERROR: Unexpected error: {exc}", file=sys.stderr)
+        log_error(f"Unexpected error: {exc}")
         sys.exit(1)
 
 

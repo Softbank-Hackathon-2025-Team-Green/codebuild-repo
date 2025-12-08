@@ -9,6 +9,7 @@ from pathlib import Path
 
 WRAPPER_PATH = Path("index-wrapper.js")
 USER_INDEX_PATH = Path("index.js")
+STEP = "[create_env_wrapper]"
 
 WRAPPER_TEMPLATE = """// Auto-generated wrapper to load .env file
 require('dotenv').config();
@@ -59,6 +60,12 @@ exports.handler = async (req, res) => {
 };
 """
 
+def log_info(msg):
+    print(f"{STEP} INFO: {msg}", file=sys.stderr)
+    
+def log_error(msg):
+    print(f"{STEP} ERROR: {msg}", file=sys.stderr)
+
 def main():
     """
     Create a wrapper that loads dotenv before the user's function.
@@ -69,25 +76,25 @@ def main():
     env_exists = Path(".env").exists()
     
     if not env_exists:
-        print("No .env file found, skipping wrapper generation")
+        log_info("No .env file found, skipping wrapper generation")
         sys.exit(0)
     
     # Check if user's index.js exists
     if not USER_INDEX_PATH.exists():
-        print("ERROR: index.js not found", file=sys.stderr)
+        log_error("index.js not found")
         sys.exit(1)
     
     try:
         # Rename user's index.js to index-original.js
         USER_INDEX_PATH.rename("index-original.js")
-        print("✓ Renamed index.js to index-original.js")
+        log_info("Renamed index.js to index-original.js")
         
         # Create wrapper as new index.js
         USER_INDEX_PATH.write_text(WRAPPER_TEMPLATE, encoding="utf-8")
-        print("✓ Created index.js wrapper with dotenv loader")
+        log_info("Created index.js wrapper with dotenv loader")
         
     except Exception as exc:
-        print(f"ERROR: Failed to create wrapper: {exc}", file=sys.stderr)
+        log_error(f"Failed to create wrapper: {exc}")
         sys.exit(1)
 
 

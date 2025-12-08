@@ -13,258 +13,33 @@ cache:
     - LOCAL_SOURCE_CACHE
     - LOCAL_CUSTOM_CACHE
   paths:
-    - '/usr/local/bin/pack'  # pack CLI binary
-    - '/var/lib/docker/volumes/**/*'  # Docker volumes used by pack
+    - '/usr/local/bin/pack'          # pack CLI binary
+    - '/var/lib/docker/volumes/**/*' # Docker volumes used by pack
 
 phases:
   install:
     commands:
-      - echo "=== Install Cloud Native Buildpacks (pack CLI) ==="
-      - |
-        if [ ! -f /usr/local/bin/pack ]; then
-          echo "Downloading pack CLI..."
-          curl -sSL "https://github.com/buildpacks/pack/releases/download/v0.39.0/pack-v0.39.0-linux.tgz" | tar -C /usr/local/bin/ --no-same-owner -xzv pack
-        else
-          echo "pack CLI found in cache, skipping download"
-        fi
-      - pack version
+      - 'echo "[install] INFO: Setting executable permissions for scripts..."'
+      - chmod +x ./scripts/**/*.sh || true
+
+      - ./scripts/01_prebuild/install_pack.sh
 
   pre_build:
     commands:
-      - 'echo "=== Pre-build: resolve env, compute S3/ECR info, login to ECR ==="'
-      - |
-        # ---- Resolve AWS account & region ----
-        AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-        AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-$(aws configure get region)}"
-
-        echo "AWS_ACCOUNT_ID=${AWS_ACCOUNT_ID}"
-        echo "AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION}"
-        echo "PROJECT_NAME=${PROJECT_NAME}"
-        echo "USER_CODE_BUCKET=${USER_CODE_BUCKET}"
-        echo "SQS_URL=${SQS_URL}"
-        echo "ECR_REPO_NAME=${ECR_REPO_NAME}"
-        echo "USER_ID=${USER_ID}"
-        echo "FUNCTION_ID=${FUNCTION_ID}"
-        echo "IMAGE_TAG=${IMAGE_TAG}"
-        echo "CUSTOM_ROUTES=${CUSTOM_ROUTES}"
-        echo "CUSTOM_ENV=${CUSTOM_ENV}"
-        echo "AMPLIFY_DEPLOY_FAILED_URL=${AMPLIFY_DEPLOY_FAILED_URL}"
-
-
-        # ---- Compute S3 URL & ECR repo/tag ----
-        S3_URL="s3://${USER_CODE_BUCKET}/users/${USER_ID}/functions/${FUNCTION_ID}"
-        IMAGE_REPO="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${ECR_REPO_NAME}"
-        IMAGE_TAG_FULL="${FUNCTION_ID}-${IMAGE_TAG}"
-        IMAGE="${IMAGE_REPO}:${IMAGE_TAG_FULL}"
-
-        echo "S3_URL=${S3_URL}"
-        echo "IMAGE_REPO=${IMAGE_REPO}"
-        echo "IMAGE_TAG_FULL=${IMAGE_TAG_FULL}"
-        echo "IMAGE=${IMAGE}"
-
-        export AWS_ACCOUNT_ID AWS_DEFAULT_REGION S3_URL IMAGE_REPO IMAGE_TAG_FULL IMAGE
-
-      - echo "Logging in to Amazon ECR..."
-      - |
-        aws ecr get-login-password --region "${AWS_DEFAULT_REGION}" \
-          | docker login --username AWS --password-stdin "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com"
-
-      - echo "Syncing function source from S3..."
-      - rm -rf app
-      - mkdir -p app
-      - aws s3 sync "${S3_URL}" ./app
-
-      - echo "=== Validating S3 function source ==="
-      - |
-        notify_deploy_failed() {
-          local msg="$1"
-
-          if [ -z "${AMPLIFY_DEPLOY_FAILED_URL:-}" ]; then
-            echo "AMPLIFY_DEPLOY_FAILED_URL not set, skip deploy failed webhook."
-            return
-          fi
-
-          echo "Notifying Amplify /api/deploy/failed ..."
-
-          curl -s -X POST "${AMPLIFY_DEPLOY_FAILED_URL}" \
-            -H "Content-Type: application/json" \
-            -d "{\"userId\":\"${USER_ID}\",\"functionId\":\"${FUNCTION_ID}\",\"customRoutes\":\"${CUSTOM_ROUTES}\",\"message\":\"${msg}\",\"timestamp\":$(date +%s)}" \
-            || echo "WARN: failed to call Amplify deploy failed webhook"
-        }
-
-        if [ ! -f "./app/index.js" ]; then
-          echo "ERROR: index.js not found in S3 source. Build aborted."
-          echo "Checked path: ${S3_URL}"
-          ls -al ./app
-
-          notify_deploy_failed "index.js not found in S3 source"
-          exit 1
-        fi
-
-        if [ ! -f "./app/package.json" ]; then
-          echo "WARNING: package.json not found in S3 source."
-          echo "A default package.json will be created by patch_package_json.py"
-        fi
-
-        echo "S3 source validation passed."
-
-      - echo "=== Checking JavaScript Syntax Errors ==="
-      - |
-        notify_deploy_failed() {
-          local msg="$1"
-
-          if [ -z "${AMPLIFY_DEPLOY_FAILED_URL:-}" ]; then
-            echo "AMPLIFY_DEPLOY_FAILED_URL not set, skip deploy failed webhook."
-            return
-          fi
-
-          echo "Notifying Amplify /api/deploy/failed ..."
-
-          curl -s -X POST "${AMPLIFY_DEPLOY_FAILED_URL}" \
-            -H "Content-Type: application/json" \
-            -d "{\"userId\":\"${USER_ID}\",\"functionId\":\"${FUNCTION_ID}\",\"customRoutes\":\"${CUSTOM_ROUTES}\",\"message\":\"${msg}\",\"timestamp\":$(date +%s)}" \
-            || echo "WARN: failed to call Amplify deploy failed webhook"
-        }
-
-        if ! node -c ./app/index.js; then
-          echo "ERROR: JavaScript Syntax Error detected in index.js. Build aborted."
-          notify_deploy_failed "JavaScript Syntax Error in index.js"
-          exit 1
-        fi
-        echo "JavaScript syntax check passed."
-
-      - echo "Patching package.json..."
-      - cd app && python3 ../scripts/patch_package_json.py && cd ..
-
-      - echo "=== Processing custom environment variables ==="
-      - |
-        notify_deploy_failed() {
-          local msg="$1"
-
-          if [ -z "${AMPLIFY_DEPLOY_FAILED_URL:-}" ]; then
-            echo "AMPLIFY_DEPLOY_FAILED_URL not set, skip deploy failed webhook."
-            return
-          fi
-
-          echo "Notifying Amplify /api/deploy/failed ..."
-
-          curl -s -X POST "${AMPLIFY_DEPLOY_FAILED_URL}" \
-            -H "Content-Type: application/json" \
-            -d "{\"userId\":\"${USER_ID}\",\"functionId\":\"${FUNCTION_ID}\",\"customRoutes\":\"${CUSTOM_ROUTES}\",\"message\":\"${msg}\",\"timestamp\":$(date +%s)}" \
-            || echo "WARN: failed to call Amplify deploy failed webhook"
-        }
-
-        # ---- Create .env file for runtime environment variables ----
-        (
-          cd app && python3 ../scripts/create_env_file.py
-        )
-        ENV_EXIT_CODE=$?
-
-        if [ ${ENV_EXIT_CODE} -ne 0 ]; then
-          echo "ERROR: Failed to create .env file"
-          notify_deploy_failed "Failed to create .env file"
-          exit 1
-        fi
-
-        if [ -f "./app/.env" ]; then
-          echo ".env file created successfully"
-          # Create wrapper to load .env at runtime
-          (
-            cd app && python3 ../scripts/create_env_wrapper.py
-          )
-          WRAPPER_EXIT_CODE=$?
-
-          if [ ${WRAPPER_EXIT_CODE} -ne 0 ]; then
-            echo "ERROR: Failed to create env wrapper file"
-            notify_deploy_failed "Failed to create env wrapper file"
-            exit 1
-          fi
-        fi
-
-      - echo "Contents of app directory:"
+      - ./scripts/01_prebuild/resolve_env.sh
+      - ./scripts/01_prebuild/s3_sync_and_validate.sh
+      - ./scripts/01_prebuild/patch_package_json.sh
+      - ./scripts/01_prebuild/process_env_files.sh
+      - 'echo "[pre_build] INFO: Contents of app directory:"'
       - ls -R ./app
 
   build:
     commands:
-      - |
-        echo "=== Build: create container image with Cloud Native Buildpacks ==="
-        echo "Building image: ${IMAGE}"
-
-        notify_deploy_failed() {
-          local msg="$1"
-
-          if [ -z "${AMPLIFY_DEPLOY_FAILED_URL:-}" ]; then
-            echo "AMPLIFY_DEPLOY_FAILED_URL not set, skip deploy failed webhook."
-            return
-          fi
-
-          echo "Notifying Amplify /api/deploy/failed ..."
-
-          curl -s -X POST "${AMPLIFY_DEPLOY_FAILED_URL}" \
-            -H "Content-Type: application/json" \
-            -d "{\"userId\":\"${USER_ID}\",\"functionId\":\"${FUNCTION_ID}\",\"customRoutes\":\"${CUSTOM_ROUTES}\",\"message\":\"${msg}\",\"timestamp\":$(date +%s)}" \
-            || echo "WARN: failed to call Amplify deploy failed webhook"
-        }
-
-        # pack build 실패 시 Amplify로 실패 웹훅 전송
-        if ! pack build "${IMAGE}" --builder gcr.io/buildpacks/builder:latest --path ./app --pull-policy if-not-present --trust-builder; then
-          notify_deploy_failed "pack build failed"
-          exit 1
-        fi
-
-        echo "Pushing image to Amazon ECR..."
-        if ! docker push "${IMAGE}"; then
-          notify_deploy_failed "docker push failed"
-          exit 1
-        fi
+      - ./scripts/02_build/build_image.sh
 
   post_build:
     commands:
-      - 'echo "=== Post-build: send success message to SQS ==="'
-      - |
-        notify_deploy_failed() {
-          local msg="$1"
-
-          if [ -z "${AMPLIFY_DEPLOY_FAILED_URL:-}" ]; then
-            echo "AMPLIFY_DEPLOY_FAILED_URL not set, skip deploy failed webhook."
-            return
-          fi
-
-          echo "Notifying Amplify /api/deploy/failed ..."
-
-          curl -s -X POST "${AMPLIFY_DEPLOY_FAILED_URL}" \
-            -H "Content-Type: application/json" \
-            -d "{\"userId\":\"${USER_ID}\",\"functionId\":\"${FUNCTION_ID}\",\"customRoutes\":\"${CUSTOM_ROUTES}\",\"message\":\"${msg}\",\"timestamp\":$(date +%s)}" \
-            || echo "WARN: failed to call Amplify deploy failed webhook"
-        }
-        
-        echo "SQS_URL=${SQS_URL}"
-        echo "Resolving image digest from ECR..."
-
-        # ---- Resolve image digest from ECR ----
-        IMAGE_DIGEST=$(aws ecr describe-images \
-          --repository-name "${ECR_REPO_NAME}" \
-          --image-ids imageTag="${IMAGE_TAG_FULL}" \
-          --query 'imageDetails[0].imageDigest' \
-          --output text)
-
-        if [ -z "${IMAGE_DIGEST}" ] || [ "${IMAGE_DIGEST}" = "None" ]; then
-          echo "ERROR: Failed to resolve image digest from ECR"
-          notify_deploy_failed "Failed to resolve image digest from ECR"
-          exit 1
-        fi
-
-        IMAGE_DIGEST_URI="${IMAGE_REPO}@${IMAGE_DIGEST}"
-        echo "IMAGE_DIGEST=${IMAGE_DIGEST}"
-        echo "IMAGE_DIGEST_URI=${IMAGE_DIGEST_URI}"
-
-        # ---- Build SQS message body (digest 기반 URI) ----
-        MESSAGE_BODY="{\"userId\":\"${USER_ID}\",\"functionId\":\"${FUNCTION_ID}\",\"ImageDigest\":\"${IMAGE_DIGEST_URI}\",\"customRoutes\":\"${CUSTOM_ROUTES}\"}"
-        echo "Sending message to SQS: ${MESSAGE_BODY}"
-
-        aws sqs send-message \
-          --queue-url "${SQS_URL}" \
-          --message-body "${MESSAGE_BODY}"
+      - ./scripts/03_postbuild/publish_sqs_message.sh
 
 artifacts:
   files: []
