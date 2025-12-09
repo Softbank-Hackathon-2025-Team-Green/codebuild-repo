@@ -11,6 +11,9 @@
 <br>
 유지보수성과 확장성을 위해 스크립트가 단계별로 모듈화되어 있습니다.
 
+---
+
+
 ## 📂 디렉터리 구조
 빌드 스크립트는 실행 단계와 목적에 따라 체계적으로 분리되어 있습니다.
 ```
@@ -35,6 +38,8 @@
     └── common.sh                   # 공통 함수 (에러 핸들링, 환경변수 로드)
 ```
 
+---
+
 ## ⚙️ 빌드 프로세스
 `buildspec.yml`에 정의된 4단계의 라이프사이클을 통해 빌드가 진행됩니다.
 
@@ -57,6 +62,8 @@
 - 실패 알림: `common.sh`에 정의된 `notify_deploy_failed` 함수를 통해 단계별 오류 발생 시 즉시 실패 상태를 전파합니다.
 <br>
 
+---
+
 ## 🐍 Python 유틸리티 스크립트 (`scripts/lib/`)
 복잡한 파일 조작 로직은 파이썬 스크립트로 분리하여 관리합니다.
 - `scripts/lib/patch_package_json.py`: `package.json` 파일에 `@google-cloud/functions-framework` 와 `dotenv` 의존성을 추가하고, `start` 스크립트를 설정하여 Cloud Functions Framework를 통해 함수를 실행할 수 있도록 보장합니다.
@@ -64,6 +71,8 @@
 - `scripts/lib/create_env_wrapper.py`: `dotenv`를 사용하여 `.env` 파일을 로드하는 `index.js` 래퍼를 생성합니다.
 - `scripts/lib/parse_custom_env.py`: (현재 `buildspec.yml`에서 사용되지 않음) `CUSTOM_ENV` 변수를 파싱하여 `pack build` 명령어에 `--env` 플래그로 전달하는 대안적인 방법을 제공합니다.
 <br>
+
+---
 
 ## ⚡ 캐시 설정
 빌드 성능 향상을 위해 `buildspec.yml`에 다음과 같은 로컬 캐시가 적용되어 있습니다.
